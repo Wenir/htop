@@ -146,6 +146,45 @@ static bool expandCollapse(Panel* panel) {
    return true;
 }
 
+#define mk_debug(filename, ...)                 \
+    do {                                                   \
+        FILE *file = fopen(filename, "a");                 \
+        if (file == NULL) {                                \
+            perror("Error opening file");                  \
+            exit(EXIT_FAILURE);                            \
+        }                                                  \
+        fprintf(file, __VA_ARGS__);                       \
+        if (fclose(file) != 0) {                           \
+            perror("Error closing file");                  \
+            exit(EXIT_FAILURE);                            \
+        }                                                  \
+    } while (0)
+
+static bool expandBranchIter(Panel* panel, Row* parent) {
+   parent->showChildren = true;
+
+   int parent_id = parent->id;
+
+   // mk_debug("mk_log", "parent_id: %d\n", parent_id);
+
+   for (int i = 0; i < Panel_size(panel); i++) {
+      Row* row = (Row*) Panel_get(panel, i);
+      if (Row_isChildOf(row, parent_id)) {
+         expandBranchIter(panel, row);
+      }
+   }
+
+   return true;
+}
+
+static bool expandBranch(Panel* panel) {
+   Row* row = (Row*) Panel_getSelected(panel);
+   if (!row)
+      return false;
+
+   return expandBranchIter(panel, row);
+}
+
 static bool collapseIntoParent(Panel* panel) {
    const Row* r = (Row*) Panel_getSelected(panel);
    if (!r)
@@ -350,6 +389,14 @@ static Htop_Reaction actionExpandOrCollapse(State* st) {
       return HTOP_OK;
 
    bool changed = expandCollapse((Panel*)st->mainPanel);
+   return changed ? HTOP_RECALCULATE : HTOP_OK;
+}
+
+static Htop_Reaction actionExpandBranch(State* st) {
+   if (!st->host->settings->ss->treeView)
+      return HTOP_OK;
+
+   bool changed = expandBranch((Panel*)st->mainPanel);
    return changed ? HTOP_RECALCULATE : HTOP_OK;
 }
 
@@ -887,7 +934,7 @@ void Action_setBindings(Htop_Action* keys) {
    keys[' '] = actionTag;
    keys['#'] = actionToggleHideMeters;
    keys['*'] = actionExpandOrCollapseAllBranches;
-   keys['+'] = actionExpandOrCollapse;
+   keys['+'] = actionExpandBranch;
    keys[','] = actionSetSortColumn;
    keys['-'] = actionExpandOrCollapse;
    keys['.'] = actionSetSortColumn;
